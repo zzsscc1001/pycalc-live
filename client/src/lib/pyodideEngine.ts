@@ -14,6 +14,7 @@ export interface LineResult {
   isError: boolean;
   errorMsg?: string;
   stdout?: string;     // captured print() output for this line
+  isAssignment?: boolean; // true if result is from assignment (MATLAB style)
 }
 
 export interface VarInfo {
@@ -120,7 +121,7 @@ def _pycalc_exec(source, user_globals):
     except SyntaxError as e:
         return [{"line_index": (e.lineno or 1) - 1, "value": None,
                  "is_error": True, "error_msg": f"SyntaxError: {e.msg} (line {e.lineno})",
-                 "stdout": ""}]
+                 "stdout": "", "is_assignment": False}]
     
     # Map each top-level statement to its starting line (0-based)
     # We'll execute statements one by one
@@ -129,7 +130,7 @@ def _pycalc_exec(source, user_globals):
     
     # Pre-fill results for all lines with None
     line_results = [{"line_index": i, "value": None, "is_error": False,
-                     "error_msg": None, "stdout": ""} for i in range(n_lines)]
+                     "error_msg": None, "stdout": "", "is_assignment": False} for i in range(n_lines)]
     
     # Collect all top-level statements
     stmts = tree.body
@@ -174,6 +175,31 @@ def _pycalc_exec(source, user_globals):
                 sys.stdout = old_stdout
                 if captured:
                     line_results[stmt_line]["stdout"] = captured.rstrip('\\n')
+                # MATLAB-style: show value for assignment statements
+                if isinstance(stmt, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+                    try:
+                        if isinstance(stmt, ast.Assign):
+                            targets = stmt.targets
+                        elif isinstance(stmt, ast.AnnAssign):
+                            targets = [stmt.target] if stmt.value is not None else []
+                        else:
+                            targets = [stmt.target]
+                        for target in targets:
+                            if isinstance(target, ast.Name):
+                                var_name = target.id
+                                if var_name in user_globals:
+                                    line_results[stmt_line]["value"] = f"{var_name} = {_pycalc_repr(user_globals[var_name])}"
+                                    line_results[stmt_line]["is_assignment"] = True
+                                    break
+                            elif isinstance(target, ast.Tuple):
+                                names = [n.id for n in target.elts if isinstance(n, ast.Name)]
+                                if names:
+                                    parts = [f"{n} = {_pycalc_repr(user_globals[n])}" for n in names[:3] if n in user_globals]
+                                    if parts:
+                                        line_results[stmt_line]["value"] = ",  ".join(parts)
+                                        line_results[stmt_line]["is_assignment"] = True
+                    except Exception:
+                        pass
         except Exception as e:
             captured = sys.stdout.getvalue()
             sys.stdout = old_stdout
@@ -260,6 +286,7 @@ export async function executeCode(source: string): Promise<ExecResult> {
         isError: item.is_error ?? item.get?.('is_error') ?? false,
         errorMsg: item.error_msg ?? item.get?.('error_msg') ?? undefined,
         stdout: item.stdout ?? item.get?.('stdout') ?? '',
+        isAssignment: !!(item.is_assignment ?? item.get?.('is_assignment') ?? false),
       });
     }
   }

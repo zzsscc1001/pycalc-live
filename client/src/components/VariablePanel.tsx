@@ -1,28 +1,28 @@
 /**
  * VariablePanel — 实时变量侧边栏
  * 显示当前 Python 命名空间中的所有用户定义变量。
- * Design: Dark IDE Aesthetic — Catppuccin Mocha palette
+ * Design: Light IDE Aesthetic — GitHub Light inspired
  */
 import { VarInfo } from '@/lib/pyodideEngine';
 
 const TYPE_COLORS: Record<string, string> = {
-  int:       'text-[#89b4fa]',
-  float:     'text-[#89dceb]',
-  complex:   'text-[#cba6f7]',
-  str:       'text-[#a6e3a1]',
-  bool:      'text-[#fab387]',
-  list:      'text-[#f9e2af]',
-  tuple:     'text-[#f9e2af]',
-  dict:      'text-[#f9e2af]',
-  set:       'text-[#f9e2af]',
-  ndarray:   'text-[#89dceb]',
-  DataFrame: 'text-[#89dceb]',
-  Series:    'text-[#89dceb]',
-  NoneType:  'text-[#6c7086]',
+  int:       '#0550ae',
+  float:     '#0969da',
+  complex:   '#8250df',
+  str:       '#1a7f37',
+  bool:      '#953800',
+  list:      '#6e7781',
+  tuple:     '#6e7781',
+  dict:      '#6e7781',
+  set:       '#6e7781',
+  ndarray:   '#0969da',
+  DataFrame: '#0969da',
+  Series:    '#0969da',
+  NoneType:  '#8c959f',
 };
 
 function typeColor(t: string) {
-  return TYPE_COLORS[t] ?? 'text-[#cdd6f4]';
+  return TYPE_COLORS[t] ?? '#57606a';
 }
 
 interface VariablePanelProps {
@@ -38,15 +38,15 @@ const SKELETON_VARS = [
 
 export default function VariablePanel({ variables, isRunning }: VariablePanelProps) {
   return (
-    <div className="flex flex-col h-full" style={{ background: 'oklch(0.145 0.016 265)' }}>
+    <div className="flex flex-col h-full" style={{ background: '#f6f8fa' }}>
       {/* Header */}
       <div
         className="flex items-center gap-2 px-3 py-2 border-b shrink-0"
-        style={{ borderColor: 'oklch(1 0 0 / 8%)' }}
+        style={{ borderColor: 'rgba(0,0,0,0.08)' }}
       >
         <span
           className="text-[10px] font-semibold uppercase tracking-widest"
-          style={{ color: 'oklch(0.45 0.01 265)', fontFamily: 'var(--font-mono)' }}
+          style={{ color: '#57606a', fontFamily: 'var(--font-mono)' }}
         >
           变量
         </span>
@@ -54,8 +54,8 @@ export default function VariablePanel({ variables, isRunning }: VariablePanelPro
           <span
             className="ml-auto text-[10px] rounded px-1.5 py-0.5"
             style={{
-              color: 'oklch(0.72 0.14 265)',
-              background: 'oklch(0.72 0.14 265 / 12%)',
+              color: '#0550ae',
+              background: 'rgba(5,80,174,0.08)',
               fontFamily: 'var(--font-mono)',
             }}
           >
@@ -68,30 +68,33 @@ export default function VariablePanel({ variables, isRunning }: VariablePanelPro
       <div className="flex-1 overflow-y-auto py-1.5">
         {variables.length === 0 ? (
           <div className="px-2 pt-2">
-            {/* Skeleton placeholder cards */}
             {SKELETON_VARS.map((ph) => (
               <div
                 key={ph.name}
-                className="my-0.5 rounded px-2 py-1.5 border opacity-20"
-                style={{ background: 'oklch(0.20 0.018 265)', borderColor: 'oklch(1 0 0 / 8%)' }}
+                className="my-0.5 rounded px-2 py-1.5 border opacity-30"
+                style={{ background: '#ffffff', borderColor: 'rgba(0,0,0,0.08)' }}
               >
                 <div className="flex items-center gap-1.5 mb-0.5">
                   <span
-                    className="text-[13px] font-semibold text-[#cdd6f4]"
-                    style={{ fontFamily: 'var(--font-mono)' }}
+                    className="text-[13px] font-semibold"
+                    style={{ fontFamily: 'var(--font-mono)', color: '#24292f' }}
                   >
                     {ph.name}
                   </span>
                   <span
-                    className="text-[10px] px-1 rounded-sm border border-white/10 text-[#89b4fa]"
-                    style={{ fontFamily: 'var(--font-mono)' }}
+                    className="text-[10px] px-1 rounded-sm border"
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      color: '#0550ae',
+                      borderColor: 'rgba(5,80,174,0.2)',
+                    }}
                   >
                     {ph.type}
                   </span>
                 </div>
                 <div
-                  className="text-[11px] text-[#a6adc8]"
-                  style={{ fontFamily: 'var(--font-mono)' }}
+                  className="text-[11px]"
+                  style={{ fontFamily: 'var(--font-mono)', color: '#57606a' }}
                 >
                   {ph.val}
                 </div>
@@ -99,10 +102,10 @@ export default function VariablePanel({ variables, isRunning }: VariablePanelPro
             ))}
             <div
               className="mt-3 text-center text-[10px]"
-              style={{ color: 'oklch(0.40 0.01 265)' }}
+              style={{ color: '#8c959f' }}
             >
               {isRunning ? (
-                <span style={{ color: 'oklch(0.72 0.14 265)' }}>执行中…</span>
+                <span style={{ color: '#0550ae' }}>执行中…</span>
               ) : (
                 <span>按 Shift+Enter 运行后显示</span>
               )}
@@ -121,26 +124,34 @@ function VarCard({ v }: { v: VarInfo }) {
 
   return (
     <div
-      className={`mx-2 my-0.5 rounded px-2 py-1.5 border border-white/5 transition-colors ${v.updated ? 'var-updated' : ''}`}
-      style={{ background: 'oklch(0.20 0.018 265)' }}
+      className={`mx-2 my-0.5 rounded px-2 py-1.5 border transition-all ${v.updated ? 'var-updated' : ''}`}
+      style={{ background: '#ffffff', borderColor: 'rgba(0,0,0,0.08)' }}
     >
       <div className="flex items-center gap-1.5 mb-0.5">
         <span
-          className="text-[13px] font-semibold text-[#cdd6f4]"
-          style={{ fontFamily: 'var(--font-mono)' }}
+          className="text-[13px] font-semibold"
+          style={{ fontFamily: 'var(--font-mono)', color: '#24292f' }}
         >
           {v.name}
         </span>
         <span
-          className={`text-[10px] px-1 rounded-sm border border-white/10 ${typeColor(v.type)}`}
-          style={{ fontFamily: 'var(--font-mono)' }}
+          className="text-[10px] px-1 rounded-sm border"
+          style={{
+            fontFamily: 'var(--font-mono)',
+            color: typeColor(v.type),
+            borderColor: `${typeColor(v.type)}33`,
+          }}
         >
           {v.type}
         </span>
       </div>
       <div
-        className={`text-[11px] text-[#a6adc8] break-all leading-relaxed ${isLong ? 'line-clamp-4' : ''}`}
-        style={{ fontFamily: 'var(--font-mono)', whiteSpace: isLong ? 'pre-wrap' : 'normal' }}
+        className={`text-[11px] break-all leading-relaxed ${isLong ? 'line-clamp-4' : ''}`}
+        style={{
+          fontFamily: 'var(--font-mono)',
+          color: '#57606a',
+          whiteSpace: isLong ? 'pre-wrap' : 'normal',
+        }}
         title={v.value}
       >
         {v.value}
@@ -148,3 +159,4 @@ function VarCard({ v }: { v: VarInfo }) {
     </div>
   );
 }
+

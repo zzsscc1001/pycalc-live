@@ -1,15 +1,16 @@
 /**
  * Home — PyCalc Live 主界面
  * 布局：顶部工具栏 + 三栏（代码编辑器 | 结果面板 | 变量侧边栏）
- * Design: Dark IDE Aesthetic — Catppuccin Mocha palette
- * 
+ * Design: Light IDE Aesthetic — GitHub Light inspired
+ *
  * 特性：
  * - Pyodide WebAssembly Python 引擎（浏览器内运行，无需服务器）
- * - 逐行自动输出结果，与代码行高严格对齐（22px）
+ * - 逐行自动输出结果（含赋值语句，MATLAB 风格），与代码行高严格对齐（22px）
  * - 变量侧边栏实时显示命名空间
  * - 一键全量重算（重置环境后重新执行）
  * - 代码自动保存到 localStorage
  * - Shift+Enter 运行，Ctrl+Enter 全量重算
+ * - 双向 hover 视觉引导：悬停代码行 ↔ 高亮对应输出行
  */
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -35,7 +36,7 @@ const DEFAULT_CODE = `# PyCalc Live — 交互式 Python 计算器
 
 x = 42
 y = 3.14
-x + y
+a = x + y
 
 # 列表和推导式
 nums = [i**2 for i in range(1, 6)]
@@ -43,11 +44,11 @@ nums
 
 # 字符串操作
 name = "PyCalc"
-f"Hello, {name}!"
+greeting = f"Hello, {name}!"
 
 # 数学计算
 import math
-math.sqrt(2) * math.pi
+result = math.sqrt(2) * math.pi
 `;
 
 function loadSavedCode(): string {
@@ -77,6 +78,7 @@ export default function Home() {
   const [varPanelOpen, setVarPanelOpen] = useState(true);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [execTime, setExecTime] = useState<number | null>(null);
+  const [hoveredLine, setHoveredLine] = useState<number | null>(null);
   const execStartRef = useRef<number>(0);
 
   // Update results when execution completes
@@ -111,10 +113,7 @@ export default function Home() {
   }, []);
 
   const handleRun = useCallback(async (code: string) => {
-    if (status === 'loading') {
-      toast.info('Python 引擎加载中，请稍候…');
-      return;
-    }
+    if (status === 'loading') { toast.info('Python 引擎加载中，请稍候…'); return; }
     const lc = editorRef.current?.getLineCount() ?? code.split('\n').length;
     setLineCount(lc);
     execStartRef.current = Date.now();
@@ -122,10 +121,7 @@ export default function Home() {
   }, [status, run]);
 
   const handleRunFresh = useCallback(async (code: string) => {
-    if (status === 'loading') {
-      toast.info('Python 引擎加载中，请稍候…');
-      return;
-    }
+    if (status === 'loading') { toast.info('Python 引擎加载中，请稍候…'); return; }
     const lc = editorRef.current?.getLineCount() ?? code.split('\n').length;
     setLineCount(lc);
     setLineResults([]);
@@ -163,29 +159,46 @@ export default function Home() {
     setScrollTop(top);
   }, []);
 
+  // Hover line: from editor → highlight result row; from result → highlight editor line
+  const handleEditorHoverLine = useCallback((lineIndex: number | null) => {
+    setHoveredLine(lineIndex);
+  }, []);
+
+  const handleResultHoverLine = useCallback((lineIndex: number | null) => {
+    setHoveredLine(lineIndex);
+    editorRef.current?.highlightLine(lineIndex);
+  }, []);
+
   const isRunning = status === 'running';
   const isLoading = status === 'loading';
   const isReady = status === 'ready';
   const errorCount = lineResults.filter((r) => r.isError).length;
   const outputCount = lineResults.filter((r) => r.value !== null || r.stdout).length;
 
+  // Toolbar colors (light theme)
+  const toolbarBg = '#f6f8fa';
+  const toolbarBorder = 'rgba(0,0,0,0.08)';
+  const textMuted = '#57606a';
+  const textDim = '#8c959f';
+  const primaryColor = '#0550ae';
+
   return (
     <div
       className="flex flex-col h-screen w-screen overflow-hidden"
-      style={{ background: 'oklch(0.175 0.018 265)', color: 'oklch(0.855 0.025 265)' }}
+      style={{ background: '#f6f8fa', color: '#24292f' }}
     >
       {/* ── Top progress bar ── */}
-      <div className="relative h-0.5 w-full overflow-hidden" style={{ background: 'oklch(1 0 0 / 5%)' }}>
+      <div className="relative h-0.5 w-full overflow-hidden" style={{ background: 'rgba(0,0,0,0.06)' }}>
         {(isLoading || isRunning) && (
           <div
             className="absolute inset-y-0 w-1/3 progress-running"
-            style={{ background: 'oklch(0.72 0.14 265)' }}
+            style={{ background: primaryColor }}
           />
         )}
         {isReady && lineResults.length > 0 && (
           <div
             className="absolute inset-0 transition-all duration-500"
-            style={{ background: errorCount > 0 ? 'oklch(0.70 0.19 15 / 60%)' : 'oklch(0.75 0.14 155 / 60%)' }}
+            style={{ background: errorCount > 0 ? 'rgba(207,34,46,0.5)' : 'rgba(26,127,55,0.5)' }}
           />
         )}
       </div>
@@ -193,32 +206,29 @@ export default function Home() {
       {/* ── Toolbar ── */}
       <header
         className="flex items-center gap-2 px-4 py-2 border-b shrink-0"
-        style={{ borderColor: 'oklch(1 0 0 / 8%)', background: 'oklch(0.155 0.016 265)' }}
+        style={{ borderColor: toolbarBorder, background: toolbarBg }}
       >
         {/* Logo + Title */}
         <div className="flex items-center gap-2 mr-3">
           <span
             className="text-[15px] font-bold tracking-tight select-none"
-            style={{ fontFamily: 'var(--font-mono)', color: 'oklch(0.72 0.14 265)' }}
+            style={{ fontFamily: 'var(--font-mono)', color: primaryColor }}
           >
             &gt;_
           </span>
-          <span className="text-[13px] font-semibold" style={{ color: 'oklch(0.855 0.025 265)' }}>
+          <span className="text-[13px] font-semibold" style={{ color: '#24292f' }}>
             PyCalc Live
           </span>
         </div>
 
-        <div className="w-px h-4 bg-white/10" />
+        <div className="w-px h-4" style={{ background: 'rgba(0,0,0,0.1)' }} />
 
         {/* Run button */}
         <button
           onClick={handleRunBtn}
           disabled={isLoading || isRunning}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[12px] font-medium transition-all active:scale-95 disabled:opacity-50"
-          style={{
-            background: 'oklch(0.72 0.14 265)',
-            color: 'oklch(0.14 0.018 265)',
-          }}
+          style={{ background: primaryColor, color: '#ffffff' }}
           title="运行 (Shift+Enter)"
         >
           {isRunning ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
@@ -231,9 +241,9 @@ export default function Home() {
           disabled={isLoading || isRunning}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[12px] font-medium transition-all active:scale-95 disabled:opacity-50 border"
           style={{
-            borderColor: 'oklch(0.72 0.14 265 / 40%)',
-            color: 'oklch(0.72 0.14 265)',
-            background: 'oklch(0.72 0.14 265 / 8%)',
+            borderColor: `${primaryColor}40`,
+            color: primaryColor,
+            background: `${primaryColor}0a`,
           }}
           title="全量重算 (Ctrl+Enter)"
         >
@@ -245,11 +255,7 @@ export default function Home() {
         <button
           onClick={handleClear}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px] transition-all active:scale-95 border"
-          style={{
-            borderColor: 'oklch(1 0 0 / 10%)',
-            color: 'oklch(0.62 0.02 265)',
-            background: 'transparent',
-          }}
+          style={{ borderColor: 'rgba(0,0,0,0.1)', color: textMuted, background: 'transparent' }}
           title="清空结果"
         >
           <Trash2 size={13} />
@@ -259,11 +265,7 @@ export default function Home() {
         <button
           onClick={handleSaveNow}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[12px] transition-all active:scale-95 border"
-          style={{
-            borderColor: 'oklch(1 0 0 / 10%)',
-            color: 'oklch(0.62 0.02 265)',
-            background: 'transparent',
-          }}
+          style={{ borderColor: 'rgba(0,0,0,0.1)', color: textMuted, background: 'transparent' }}
           title="保存代码"
         >
           <Save size={13} />
@@ -273,15 +275,11 @@ export default function Home() {
 
         {/* Execution stats */}
         {isReady && lineResults.length > 0 && (
-          <div className="flex items-center gap-2 text-[11px]" style={{ color: 'oklch(0.62 0.02 265)' }}>
+          <div className="flex items-center gap-2 text-[11px]" style={{ color: textMuted }}>
             {errorCount > 0 ? (
-              <span style={{ color: 'oklch(0.70 0.19 15)' }}>
-                {errorCount} 个错误
-              </span>
+              <span style={{ color: '#cf222e' }}>{errorCount} 个错误</span>
             ) : (
-              <span style={{ color: 'oklch(0.75 0.14 155)' }}>
-                {outputCount} 行输出
-              </span>
+              <span style={{ color: '#1a7f37' }}>{outputCount} 行输出</span>
             )}
             {execTime !== null && (
               <span>· {execTime < 1000 ? `${execTime}ms` : `${(execTime / 1000).toFixed(1)}s`}</span>
@@ -290,51 +288,36 @@ export default function Home() {
         )}
 
         {/* Status indicator */}
-        <div className="flex items-center gap-1.5 text-[11px]" style={{ color: 'oklch(0.62 0.02 265)' }}>
+        <div className="flex items-center gap-1.5 text-[11px]" style={{ color: textMuted }}>
           {isLoading && (
-            <>
-              <Loader2 size={11} className="animate-spin" />
-              <span>加载引擎…</span>
-            </>
+            <><Loader2 size={11} className="animate-spin" /><span>加载引擎…</span></>
           )}
           {isRunning && (
-            <>
-              <Loader2 size={11} className="animate-spin" style={{ color: 'oklch(0.72 0.14 265)' }} />
-              <span style={{ color: 'oklch(0.72 0.14 265)' }}>执行中</span>
-            </>
+            <><Loader2 size={11} className="animate-spin" style={{ color: primaryColor }} /><span style={{ color: primaryColor }}>执行中</span></>
           )}
           {isReady && (
-            <>
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'oklch(0.75 0.14 155)' }} />
-              <span>就绪</span>
-            </>
+            <><span className="w-1.5 h-1.5 rounded-full" style={{ background: '#1a7f37' }} /><span>就绪</span></>
           )}
           {status === 'error' && (
-            <>
-              <AlertCircle size={11} style={{ color: 'oklch(0.70 0.19 15)' }} />
-              <span style={{ color: 'oklch(0.70 0.19 15)' }}>引擎错误</span>
-            </>
+            <><AlertCircle size={11} style={{ color: '#cf222e' }} /><span style={{ color: '#cf222e' }}>引擎错误</span></>
           )}
           {status === 'idle' && (
-            <>
-              <Loader2 size={11} className="animate-spin opacity-50" />
-              <span>初始化</span>
-            </>
+            <><Loader2 size={11} className="animate-spin opacity-50" /><span>初始化</span></>
           )}
         </div>
 
-        <div className="w-px h-4 bg-white/10" />
+        <div className="w-px h-4" style={{ background: 'rgba(0,0,0,0.1)' }} />
 
         {/* Keyboard hints */}
-        <div className="hidden lg:flex items-center gap-3 text-[10px]" style={{ color: 'oklch(0.45 0.01 265)' }}>
+        <div className="hidden lg:flex items-center gap-3 text-[10px]" style={{ color: textDim }}>
           <span>
-            <kbd className="px-1 py-0.5 rounded text-[9px] border" style={{ borderColor: 'oklch(1 0 0 / 15%)', background: 'oklch(1 0 0 / 5%)' }}>
+            <kbd className="px-1 py-0.5 rounded text-[9px] border" style={{ borderColor: 'rgba(0,0,0,0.15)', background: '#ffffff' }}>
               Shift+↵
             </kbd>
             {' '}运行
           </span>
           <span>
-            <kbd className="px-1 py-0.5 rounded text-[9px] border" style={{ borderColor: 'oklch(1 0 0 / 15%)', background: 'oklch(1 0 0 / 5%)' }}>
+            <kbd className="px-1 py-0.5 rounded text-[9px] border" style={{ borderColor: 'rgba(0,0,0,0.15)', background: '#ffffff' }}>
               Ctrl+↵
             </kbd>
             {' '}重算
@@ -346,8 +329,8 @@ export default function Home() {
           onClick={() => setVarPanelOpen((v) => !v)}
           className="flex items-center gap-1 px-2 py-1.5 rounded text-[11px] transition-all"
           style={{
-            color: varPanelOpen ? 'oklch(0.72 0.14 265)' : 'oklch(0.62 0.02 265)',
-            background: varPanelOpen ? 'oklch(0.72 0.14 265 / 10%)' : 'transparent',
+            color: varPanelOpen ? primaryColor : textMuted,
+            background: varPanelOpen ? `${primaryColor}10` : 'transparent',
           }}
           title="切换变量面板"
         >
@@ -363,24 +346,22 @@ export default function Home() {
           className="flex flex-col overflow-hidden"
           style={{
             flex: varPanelOpen ? '0 0 55%' : '0 0 70%',
-            borderRight: '1px solid oklch(1 0 0 / 8%)',
+            borderRight: `1px solid ${toolbarBorder}`,
             transition: 'flex 200ms cubic-bezier(0.23, 1, 0.32, 1)',
           }}
         >
           <div
             className="flex items-center gap-2 px-3 py-1.5 shrink-0 border-b"
-            style={{ borderColor: 'oklch(1 0 0 / 6%)', background: 'oklch(0.155 0.016 265)' }}
+            style={{ borderColor: toolbarBorder, background: toolbarBg }}
           >
-            <span className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: 'oklch(0.45 0.01 265)' }}>
+            <span className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: textDim }}>
               代码
             </span>
-            <span className="ml-auto text-[10px]" style={{ color: 'oklch(0.45 0.01 265)', fontFamily: 'var(--font-mono)' }}>
+            <span className="ml-auto text-[10px]" style={{ color: textDim, fontFamily: 'var(--font-mono)' }}>
               Python 3
             </span>
             {lastSaved && (
-              <span className="text-[10px]" style={{ color: 'oklch(0.45 0.01 265)' }}>
-                · 已自动保存
-              </span>
+              <span className="text-[10px]" style={{ color: textDim }}>· 已自动保存</span>
             )}
           </div>
           <div className="flex-1 overflow-hidden">
@@ -391,6 +372,7 @@ export default function Home() {
               onScrollChange={handleScrollChange}
               onRun={handleRun}
               onRunFresh={handleRunFresh}
+              onHoverLine={handleEditorHoverLine}
             />
           </div>
         </div>
@@ -400,19 +382,19 @@ export default function Home() {
           className="flex flex-col overflow-hidden"
           style={{
             flex: varPanelOpen ? '0 0 25%' : '0 0 30%',
-            borderRight: varPanelOpen ? '1px solid oklch(1 0 0 / 8%)' : 'none',
+            borderRight: varPanelOpen ? `1px solid ${toolbarBorder}` : 'none',
             transition: 'flex 200ms cubic-bezier(0.23, 1, 0.32, 1)',
           }}
         >
           <div
             className="flex items-center gap-2 px-3 py-1.5 shrink-0 border-b"
-            style={{ borderColor: 'oklch(1 0 0 / 6%)', background: 'oklch(0.155 0.016 265)' }}
+            style={{ borderColor: toolbarBorder, background: toolbarBg }}
           >
-            <span className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: 'oklch(0.45 0.01 265)' }}>
+            <span className="text-[10px] uppercase tracking-widest font-semibold" style={{ color: textDim }}>
               输出
             </span>
             {errorCount > 0 && (
-              <span className="ml-auto text-[10px] flex items-center gap-1" style={{ color: 'oklch(0.70 0.19 15)' }}>
+              <span className="ml-auto text-[10px] flex items-center gap-1" style={{ color: '#cf222e' }}>
                 <AlertCircle size={10} />
                 {errorCount} 错误
               </span>
@@ -423,6 +405,8 @@ export default function Home() {
               lineResults={lineResults}
               totalLines={lineCount}
               scrollTop={scrollTop}
+              hoveredLine={hoveredLine}
+              onHoverLine={handleResultHoverLine}
             />
           </div>
         </div>
@@ -442,7 +426,7 @@ export default function Home() {
       {loadError && (
         <div
           className="flex items-center gap-2 px-4 py-2 text-[12px] shrink-0"
-          style={{ background: 'oklch(0.70 0.19 15 / 15%)', color: 'oklch(0.70 0.19 15)' }}
+          style={{ background: 'rgba(207,34,46,0.08)', color: '#cf222e' }}
         >
           <AlertCircle size={13} />
           <span>Python 引擎加载失败：{loadError}</span>
