@@ -28,6 +28,8 @@ import {
   Info,
   Save,
 } from 'lucide-react';
+import { Package } from 'lucide-react';
+import PackagePanel from '@/components/PackagePanel';
 
 const STORAGE_KEY = 'pycalc-live-code';
 
@@ -76,6 +78,7 @@ export default function Home() {
   const [lineResults, setLineResults] = useState<LineResult[]>([]);
   const [variables, setVariables] = useState<VarInfo[]>([]);
   const [varPanelOpen, setVarPanelOpen] = useState(true);
+  const [pkgPanelOpen, setPkgPanelOpen] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [execTime, setExecTime] = useState<number | null>(null);
   const [hoveredLine, setHoveredLine] = useState<number | null>(null);
@@ -153,6 +156,11 @@ export default function Home() {
     saveCode(code);
     setLastSaved(new Date());
     toast.success('已保存', { duration: 1200 });
+  }, []);
+
+  const handleInsertImport = useCallback((importStatement: string) => {
+    editorRef.current?.appendText(importStatement);
+    toast.success(`已插入: ${importStatement.split('\n')[0]}`, { duration: 1500 });
   }, []);
 
   const handleScrollChange = useCallback((top: number) => {
@@ -337,6 +345,20 @@ export default function Home() {
           <Info size={13} />
           <span className="hidden md:inline">变量</span>
         </button>
+
+        {/* Package panel toggle */}
+        <button
+          onClick={() => setPkgPanelOpen((v) => !v)}
+          className="flex items-center gap-1 px-2 py-1.5 rounded text-[11px] transition-all"
+          style={{
+            color: pkgPanelOpen ? primaryColor : textMuted,
+            background: pkgPanelOpen ? `${primaryColor}10` : 'transparent',
+          }}
+          title="可用包列表"
+        >
+          <Package size={13} />
+          <span className="hidden md:inline">包</span>
+        </button>
       </header>
 
       {/* ── Main content ── */}
@@ -345,7 +367,7 @@ export default function Home() {
         <div
           className="flex flex-col overflow-hidden"
           style={{
-            flex: varPanelOpen ? '0 0 55%' : '0 0 70%',
+            flex: (varPanelOpen || pkgPanelOpen) ? '0 0 50%' : '0 0 70%',
             borderRight: `1px solid ${toolbarBorder}`,
             transition: 'flex 200ms cubic-bezier(0.23, 1, 0.32, 1)',
           }}
@@ -381,8 +403,8 @@ export default function Home() {
         <div
           className="flex flex-col overflow-hidden"
           style={{
-            flex: varPanelOpen ? '0 0 25%' : '0 0 30%',
-            borderRight: varPanelOpen ? `1px solid ${toolbarBorder}` : 'none',
+            flex: (varPanelOpen || pkgPanelOpen) ? '0 0 25%' : '0 0 30%',
+            borderRight: (varPanelOpen || pkgPanelOpen) ? `1px solid ${toolbarBorder}` : 'none',
             transition: 'flex 200ms cubic-bezier(0.23, 1, 0.32, 1)',
           }}
         >
@@ -418,6 +440,19 @@ export default function Home() {
             style={{ flex: '0 0 20%', minWidth: 180 }}
           >
             <VariablePanel variables={variables} isRunning={isRunning} />
+          </div>
+        )}
+
+        {/* Right: Package panel */}
+        {pkgPanelOpen && (
+          <div
+            className="flex flex-col overflow-hidden"
+            style={{ flex: '0 0 25%', minWidth: 220 }}
+          >
+            <PackagePanel
+              onInsertImport={handleInsertImport}
+              onClose={() => setPkgPanelOpen(false)}
+            />
           </div>
         )}
       </div>

@@ -1,15 +1,12 @@
 /**
  * ResultPanel — 逐行结果输出面板
  * 与代码编辑器行高严格对齐（22px/行），自动显示表达式值和 print() 输出。
+ * 支持 matplotlib 图表内嵌显示（plotSvg 字段）。
  * Design: Light IDE Aesthetic — GitHub Light inspired
- * 
- * Hover 视觉引导：
- * - 悬停代码行 → 对应输出行高亮（蓝色左边框 + 背景）
- * - 悬停输出行 → 通知父组件高亮对应代码行
  */
 import { useState, useCallback } from 'react';
 import { LineResult } from '@/lib/pyodideEngine';
-import { X, ChevronDown } from 'lucide-react';
+import { X, ChevronDown, Maximize2 } from 'lucide-react';
 
 const LINE_HEIGHT = 22; // px — must match CSS --line-height-code
 
@@ -17,8 +14,8 @@ interface ResultPanelProps {
   lineResults: LineResult[];
   totalLines: number;
   scrollTop: number;
-  hoveredLine: number | null;        // from editor hover
-  onHoverLine: (line: number | null) => void;  // notify parent
+  hoveredLine: number | null;
+  onHoverLine: (line: number | null) => void;
 }
 
 export default function ResultPanel({
@@ -30,18 +27,39 @@ export default function ResultPanel({
 }: ResultPanelProps) {
   const [expandedLine, setExpandedLine] = useState<number | null>(null);
   const [expandedContent, setExpandedContent] = useState('');
+  const [expandedIsPlot, setExpandedIsPlot] = useState(false);
 
   const resultMap = new Map<number, LineResult>();
   for (const r of lineResults) {
     resultMap.set(r.lineIndex, r);
   }
 
-  const handleExpand = useCallback((lineIndex: number, content: string) => {
+  const handleExpand = useCallback((lineIndex: number, content: string, isPlot = false) => {
     setExpandedLine(lineIndex);
     setExpandedContent(content);
+    setExpandedIsPlot(isPlot);
   }, []);
 
   const hasResults = lineResults.length > 0;
+
+  // Calculate total height including plot rows
+  const rowHeights: number[] = [];
+  for (let i = 0; i < totalLines; i++) {
+    const r = resultMap.get(i);
+    if (r?.plotSvg) {
+      rowHeights.push(180); // plot row height
+    } else {
+      rowHeights.push(LINE_HEIGHT);
+    }
+  }
+
+  // Calculate cumulative offsets
+  const offsets: number[] = [];
+  let cumulative = 0;
+  for (const h of rowHeights) {
+    offsets.push(cumulative);
+    cumulative += h;
+  }
 
   return (
     <div
@@ -73,7 +91,7 @@ export default function ResultPanel({
         >
           {Array.from({ length: totalLines }).map((_, i) => {
             const r = resultMap.get(i);
-            const hasOutput = r && (r.value !== null || r.stdout || r.isError);
+            const hasOutput = r && (r.value !== null || r.stdout || r.isError || r.plotSvg);
             const isHovered = hoveredLine === i;
             return (
               <ResultRow
@@ -105,27 +123,38 @@ export default function ResultPanel({
               className="text-[11px] font-semibold"
               style={{ color: '#57606a', fontFamily: 'var(--font-mono)' }}
             >
-              第 {expandedLine + 1} 行完整输出
+              第 {expandedLine + 1} 行{expandedIsPlot ? '图表' : '完整输出'}
             </span>
             <button
               onClick={() => setExpandedLine(null)}
-              className="p-1 rounded transition-colors"
+              className="p-1 rounded transition-colors hover:bg-black/5"
               style={{ color: '#57606a' }}
             >
               <X size={13} />
             </button>
           </div>
-          <pre
-            className="flex-1 overflow-auto p-3 text-[12px] leading-relaxed"
-            style={{
-              fontFamily: 'var(--font-mono)',
-              color: '#24292f',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-all',
-            }}
-          >
-            {expandedContent}
-          </pre>
+          {expandedIsPlot ? (
+            <div className="flex-1 overflow-auto flex items-center justify-center p-4">
+              <img
+                src={expandedContent}
+                alt="matplotlib plot"
+                className="max-w-full max-h-full object-contain rounded"
+                style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.1)' }}
+              />
+            </div>
+          ) : (
+            <pre
+              className="flex-1 overflow-auto p-3 text-[12px] leading-relaxed"
+              style={{
+                fontFamily: 'var(--font-mono)',
+                color: '#24292f',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-all',
+              }}
+            >
+              {expandedContent}
+            </pre>
+          )}
         </div>
       )}
     </div>
@@ -137,12 +166,54 @@ interface ResultRowProps {
   result?: LineResult;
   hasOutput: boolean;
   isHovered: boolean;
-  onExpand: (lineIndex: number, content: string) => void;
+  onExpand: (lineIndex: number, content: string, isPlot?: boolean) => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 }
 
 function ResultRow({ lineIndex, result, hasOutput, isHovered, onExpand, onMouseEnter, onMouseLeave }: ResultRowProps) {
+  // Plot row: taller, shows thumbnail
+  if (result?.plotSvg) {
+    return (
+      <div
+        style={{
+          height: 180,
+          borderLeft: isHovered ? '2px solid #0550ae' : '2px solid transparent',
+          background: isHovered ? 'rgba(5,80,174,0.03)' : 'rgba(0,0,0,0.01)',
+          paddingLeft: isHovered ? '10px' : '12px',
+          transition: 'background 120ms ease, border-color 120ms ease',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          paddingRight: 8,
+          cursor: 'pointer',
+        }}
+        className="group"
+        onClick={() => onExpand(lineIndex, result.plotSvg!, true)}
+        title="点击查看大图"
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
+      >
+        <img
+          src={result.plotSvg}
+          alt="plot"
+          style={{
+            height: 160,
+            maxWidth: '85%',
+            objectFit: 'contain',
+            borderRadius: 4,
+            border: '1px solid rgba(0,0,0,0.08)',
+            background: '#fff',
+          }}
+        />
+        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Maximize2 size={12} style={{ color: '#57606a' }} />
+          <span className="text-[9px]" style={{ color: '#8c959f' }}>放大</span>
+        </div>
+      </div>
+    );
+  }
+
   const baseStyle: React.CSSProperties = {
     height: LINE_HEIGHT,
     lineHeight: `${LINE_HEIGHT}px`,
@@ -173,7 +244,7 @@ function ResultRow({ lineIndex, result, hasOutput, isHovered, onExpand, onMouseE
           ...baseStyle,
           borderLeft: isHovered ? '2px solid #cf222e' : '2px solid #cf222e66',
           background: isHovered ? 'rgba(207,34,46,0.08)' : 'rgba(207,34,46,0.04)',
-          paddingLeft: isHovered ? '10px' : '10px',
+          paddingLeft: '10px',
         }}
         className="result-row-enter flex items-center gap-1 cursor-pointer group pr-3"
         onClick={() => onExpand(lineIndex, errText)}
@@ -253,3 +324,4 @@ function ResultRow({ lineIndex, result, hasOutput, isHovered, onExpand, onMouseE
     </div>
   );
 }
+

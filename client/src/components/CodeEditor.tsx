@@ -28,6 +28,7 @@ export interface CodeEditorHandle {
   getScrollTop: () => number;
   getLineCount: () => number;
   highlightLine: (lineIndex: number | null) => void;
+  appendText: (text: string) => void;
 }
 
 interface CodeEditorProps {
@@ -124,6 +125,20 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
         const view = viewRef.current;
         if (!view) return;
         view.dispatch({ effects: setHoverLineEffect.of(lineIndex) });
+      },
+      appendText: (text: string) => {
+        const view = viewRef.current;
+        if (!view) return;
+        const doc = view.state.doc;
+        const end = doc.length;
+        // Add newline before if doc doesn't end with one
+        const needsNewline = end > 0 && doc.sliceString(end - 1) !== '\n';
+        const insert = (needsNewline ? '\n' : '') + text;
+        view.dispatch({
+          changes: { from: end, to: end, insert },
+          selection: { anchor: end + insert.length },
+        });
+        view.focus();
       },
     }));
 
