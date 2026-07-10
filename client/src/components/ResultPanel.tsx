@@ -301,7 +301,7 @@ function ResultRow({ lineIndex, result, hasOutput, isHovered, onExpand, onMouseE
         className="text-[11px] select-none shrink-0"
         style={{ color: isHovered ? '#0550ae' : '#8c959f' }}
       >
-        {isAssignment ? '=' : '▸'}
+        {isAssignment ? '→' : '▸'}
       </span>
       <span
         className="text-[13px] truncate flex-1"
@@ -324,4 +324,3 @@ function ResultRow({ lineIndex, result, hasOutput, isHovered, onExpand, onMouseE
     </div>
   );
 }
-

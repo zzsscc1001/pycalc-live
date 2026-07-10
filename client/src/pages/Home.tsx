@@ -149,7 +149,8 @@ export default function Home() {
     setLineCount(lc);
     execStartRef.current = Date.now();
     const prelude = buildPrelude();
-    await run(prelude + code);
+    // Execute prelude separately so user code line numbers stay correct
+    await run(code, prelude);
   }, [status, run, buildPrelude]);
 
   const handleRunFresh = useCallback(async (code: string) => {
@@ -160,7 +161,8 @@ export default function Home() {
     setVariables([]);
     execStartRef.current = Date.now();
     const prelude = buildPrelude();
-    await runFresh(prelude + code);
+    // Execute prelude separately so user code line numbers stay correct
+    await runFresh(code, prelude);
     toast.success('已全量重算', { duration: 1500 });
   }, [status, runFresh, buildPrelude]);
 

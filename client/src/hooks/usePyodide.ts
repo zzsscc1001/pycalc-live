@@ -34,24 +34,24 @@ export function usePyodide() {
     }
   }, []);
 
-  const run = useCallback(async (source: string) => {
+  const run = useCallback(async (source: string, prelude?: string) => {
     if (status === 'loading') return;
     if (status === 'idle') await initialize();
     setStatus('running');
     try {
-      const res = await executeCode(source);
+      const res = await executeCode(source, prelude);
       setResult(res);
     } finally {
       setStatus('ready');
     }
   }, [status, initialize]);
 
-  const runFresh = useCallback(async (source: string) => {
+  const runFresh = useCallback(async (source: string, prelude?: string) => {
     if (status === 'loading') return;
     if (status === 'idle') await initialize();
     setStatus('running');
     try {
-      const res = await executeCodeFresh(source);
+      const res = await executeCodeFresh(source, prelude);
       setResult(res);
     } finally {
       setStatus('ready');

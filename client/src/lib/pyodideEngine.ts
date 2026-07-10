@@ -242,10 +242,7 @@ def _pycalc_exec(source, user_globals):
                                         line_results[stmt_line]["is_assignment"] = True
                     except Exception:
                         pass
-                # Check if a plot was generated as side effect of this statement
-                plot_data = _pycalc_capture_plot()
-                if plot_data:
-                    line_results[stmt_line]["plot_svg"] = plot_data
+                # NOTE: Only capture plots on explicit plt.show() — not here
         except Exception as e:
             captured = sys.stdout.getvalue()
             sys.stdout = old_stdout
@@ -363,7 +360,7 @@ export async function resetEnv(): Promise<void> {
   prevVarValues = new Map();
 }
 
-export async function executeCode(source: string): Promise<ExecResult> {
+export async function executeCode(source: string, prelude?: string): Promise<ExecResult> {
   const py = await loadPyodide();
 
   if (!userGlobals) {
@@ -372,6 +369,17 @@ export async function executeCode(source: string): Promise<ExecResult> {
 
   // Auto-load any required Pyodide bundled packages found in the source
   await autoLoadPackages(source);
+  // Also scan prelude for packages (e.g. selected packages from panel)
+  if (prelude) await autoLoadPackages(prelude);
+
+  // Execute prelude separately so it doesn't affect user code line numbers
+  if (prelude) {
+    try {
+      py.runPython(prelude, { globals: userGlobals });
+    } catch (e) {
+      console.warn('[PyCalc] prelude execution error:', e);
+    }
+  }
 
   const pycalcExec = py.globals.get('_pycalc_exec');
   const pycalcGetVars = py.globals.get('_pycalc_get_vars');
@@ -423,9 +431,9 @@ export async function executeCode(source: string): Promise<ExecResult> {
   return { lineResults, variables, globalError };
 }
 
-export async function executeCodeFresh(source: string): Promise<ExecResult> {
+export async function executeCodeFresh(source: string, prelude?: string): Promise<ExecResult> {
   await resetEnv();
-  return executeCode(source);
+  return executeCode(source, prelude);
 }
 
 // ─── Package Discovery ───────────────────────────────────────────────────────
