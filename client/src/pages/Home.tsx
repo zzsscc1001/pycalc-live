@@ -1,12 +1,13 @@
 /**
  * Home — PyCalc Live 主界面
- * 布局：顶部工具栏 + 三栏（代码编辑器 | 结果面板 | 变量侧边栏）
+ * 布局：顶部工具栏 + 三栏（代码编辑器 | 结果面板 | 变量/包侧边栏）
  * Design: Light IDE Aesthetic — GitHub Light inspired
  *
  * 特性：
  * - Pyodide WebAssembly Python 引擎（浏览器内运行，无需服务器）
  * - 逐行自动输出结果（含赋值语句，MATLAB 风格），与代码行高严格对齐（22px）
  * - 变量侧边栏实时显示命名空间
+ * - 包面板：选中包后自动前置 import，不污染用户代码
  * - 一键全量重算（重置环境后重新执行）
  * - 代码自动保存到 localStorage
  * - Shift+Enter 运行，Ctrl+Enter 全量重算
@@ -17,8 +18,9 @@ import { toast } from 'sonner';
 import CodeEditor, { CodeEditorHandle } from '@/components/CodeEditor';
 import ResultPanel from '@/components/ResultPanel';
 import VariablePanel from '@/components/VariablePanel';
+import PackagePanel from '@/components/PackagePanel';
 import { usePyodide } from '@/hooks/usePyodide';
-import { LineResult, VarInfo } from '@/lib/pyodideEngine';
+import { LineResult, VarInfo, PackageInfo } from '@/lib/pyodideEngine';
 import {
   Play,
   RefreshCw,
@@ -27,30 +29,35 @@ import {
   AlertCircle,
   Info,
   Save,
+  Package,
 } from 'lucide-react';
-import { Package } from 'lucide-react';
-import PackagePanel from '@/components/PackagePanel';
 
 const STORAGE_KEY = 'pycalc-live-code';
 
 const DEFAULT_CODE = `# PyCalc Live — 交互式 Python 计算器
 # 按 Shift+Enter 运行，Ctrl+Enter 全量重算
 
+import math
+import matplotlib.pyplot as plt
+import numpy as np
+
+# 基础计算
 x = 42
 y = 3.14
-a = x + y
+a = math.sqrt(x + y)
 
-# 列表和推导式
+# 列表推导式
 nums = [i**2 for i in range(1, 6)]
-nums
 
-# 字符串操作
-name = "PyCalc"
-greeting = f"Hello, {name}!"
-
-# 数学计算
-import math
-result = math.sqrt(2) * math.pi
+# 绘图示例
+t = np.linspace(0, 2 * np.pi, 200)
+plt.figure(figsize=(5, 2.5))
+plt.plot(t, np.sin(t), label="sin(t)")
+plt.plot(t, np.cos(t), label="cos(t)", linestyle="--")
+plt.title("sin & cos")
+plt.legend()
+plt.tight_layout()
+plt.show()
 `;
 
 function loadSavedCode(): string {
@@ -77,8 +84,9 @@ export default function Home() {
   const [lineCount, setLineCount] = useState(() => loadSavedCode().split('\n').length);
   const [lineResults, setLineResults] = useState<LineResult[]>([]);
   const [variables, setVariables] = useState<VarInfo[]>([]);
-  const [varPanelOpen, setVarPanelOpen] = useState(true);
-  const [pkgPanelOpen, setPkgPanelOpen] = useState(false);
+  // Right panel: 'var' | 'pkg' | null — mutually exclusive
+  const [rightPanel, setRightPanel] = useState<'var' | 'pkg' | null>('var');
+  const [selectedPackages, setSelectedPackages] = useState<Map<string, PackageInfo>>(new Map());
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [execTime, setExecTime] = useState<number | null>(null);
   const [hoveredLine, setHoveredLine] = useState<number | null>(null);
@@ -115,13 +123,24 @@ export default function Home() {
     }, 2000);
   }, []);
 
+  // Build hidden import prelude from selected packages
+  const buildPrelude = useCallback((): string => {
+    if (selectedPackages.size === 0) return '';
+    const lines: string[] = [];
+    for (const pkg of Array.from(selectedPackages.values())) {
+      if (pkg.importAs) lines.push(pkg.importAs);
+    }
+    return lines.join('\n') + '\n';
+  }, [selectedPackages]);
+
   const handleRun = useCallback(async (code: string) => {
     if (status === 'loading') { toast.info('Python 引擎加载中，请稍候…'); return; }
     const lc = editorRef.current?.getLineCount() ?? code.split('\n').length;
     setLineCount(lc);
     execStartRef.current = Date.now();
-    await run(code);
-  }, [status, run]);
+    const prelude = buildPrelude();
+    await run(prelude + code);
+  }, [status, run, buildPrelude]);
 
   const handleRunFresh = useCallback(async (code: string) => {
     if (status === 'loading') { toast.info('Python 引擎加载中，请稍候…'); return; }
@@ -130,9 +149,10 @@ export default function Home() {
     setLineResults([]);
     setVariables([]);
     execStartRef.current = Date.now();
-    await runFresh(code);
+    const prelude = buildPrelude();
+    await runFresh(prelude + code);
     toast.success('已全量重算', { duration: 1500 });
-  }, [status, runFresh]);
+  }, [status, runFresh, buildPrelude]);
 
   const handleRunBtn = useCallback(() => {
     const code = editorRef.current?.getValue() ?? '';
@@ -158,16 +178,24 @@ export default function Home() {
     toast.success('已保存', { duration: 1200 });
   }, []);
 
-  const handleInsertImport = useCallback((importStatement: string) => {
-    editorRef.current?.appendText(importStatement);
-    toast.success(`已插入: ${importStatement.split('\n')[0]}`, { duration: 1500 });
+  const handleTogglePackage = useCallback((pkg: PackageInfo) => {
+    setSelectedPackages((prev) => {
+      const next = new Map(prev);
+      if (next.has(pkg.name)) {
+        next.delete(pkg.name);
+        toast.info(`已移除: ${pkg.name}`, { duration: 1200 });
+      } else {
+        next.set(pkg.name, pkg);
+        toast.success(`已选中: ${pkg.name}（运行时自动 import）`, { duration: 1800 });
+      }
+      return next;
+    });
   }, []);
 
   const handleScrollChange = useCallback((top: number) => {
     setScrollTop(top);
   }, []);
 
-  // Hover line: from editor → highlight result row; from result → highlight editor line
   const handleEditorHoverLine = useCallback((lineIndex: number | null) => {
     setHoveredLine(lineIndex);
   }, []);
@@ -182,6 +210,9 @@ export default function Home() {
   const isReady = status === 'ready';
   const errorCount = lineResults.filter((r) => r.isError).length;
   const outputCount = lineResults.filter((r) => r.value !== null || r.stdout).length;
+  const varPanelOpen = rightPanel === 'var';
+  const pkgPanelOpen = rightPanel === 'pkg';
+  const anyPanelOpen = rightPanel !== null;
 
   // Toolbar colors (light theme)
   const toolbarBg = '#f6f8fa';
@@ -281,6 +312,28 @@ export default function Home() {
 
         <div className="flex-1" />
 
+        {/* Selected packages badges */}
+        {selectedPackages.size > 0 && (
+          <div className="hidden lg:flex items-center gap-1 mr-1">
+            {Array.from(selectedPackages.values() as IterableIterator<PackageInfo>).slice(0, 3).map((pkg) => (
+              <span
+                key={pkg.name}
+                className="text-[10px] px-1.5 py-0.5 rounded-full cursor-pointer transition-opacity hover:opacity-70"
+                style={{ background: 'rgba(26,127,55,0.1)', color: '#1a7f37', fontFamily: 'var(--font-mono)' }}
+                title={`已选中: ${pkg.importAs} — 点击移除`}
+                onClick={() => handleTogglePackage(pkg)}
+              >
+                {pkg.name}
+              </span>
+            ))}
+            {selectedPackages.size > 3 && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(26,127,55,0.1)', color: '#1a7f37' }}>
+                +{selectedPackages.size - 3}
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Execution stats */}
         {isReady && lineResults.length > 0 && (
           <div className="flex items-center gap-2 text-[11px]" style={{ color: textMuted }}>
@@ -334,7 +387,7 @@ export default function Home() {
 
         {/* Variable panel toggle */}
         <button
-          onClick={() => setVarPanelOpen((v) => !v)}
+          onClick={() => setRightPanel((p) => p === 'var' ? null : 'var')}
           className="flex items-center gap-1 px-2 py-1.5 rounded text-[11px] transition-all"
           style={{
             color: varPanelOpen ? primaryColor : textMuted,
@@ -348,7 +401,7 @@ export default function Home() {
 
         {/* Package panel toggle */}
         <button
-          onClick={() => setPkgPanelOpen((v) => !v)}
+          onClick={() => setRightPanel((p) => p === 'pkg' ? null : 'pkg')}
           className="flex items-center gap-1 px-2 py-1.5 rounded text-[11px] transition-all"
           style={{
             color: pkgPanelOpen ? primaryColor : textMuted,
@@ -358,6 +411,14 @@ export default function Home() {
         >
           <Package size={13} />
           <span className="hidden md:inline">包</span>
+          {selectedPackages.size > 0 && (
+            <span
+              className="ml-0.5 text-[9px] px-1 py-0.5 rounded-full font-bold"
+              style={{ background: primaryColor, color: '#fff', lineHeight: 1 }}
+            >
+              {selectedPackages.size}
+            </span>
+          )}
         </button>
       </header>
 
@@ -367,7 +428,7 @@ export default function Home() {
         <div
           className="flex flex-col overflow-hidden"
           style={{
-            flex: (varPanelOpen || pkgPanelOpen) ? '0 0 50%' : '0 0 70%',
+            flex: anyPanelOpen ? '0 0 50%' : '0 0 70%',
             borderRight: `1px solid ${toolbarBorder}`,
             transition: 'flex 200ms cubic-bezier(0.23, 1, 0.32, 1)',
           }}
@@ -403,8 +464,8 @@ export default function Home() {
         <div
           className="flex flex-col overflow-hidden"
           style={{
-            flex: (varPanelOpen || pkgPanelOpen) ? '0 0 25%' : '0 0 30%',
-            borderRight: (varPanelOpen || pkgPanelOpen) ? `1px solid ${toolbarBorder}` : 'none',
+            flex: anyPanelOpen ? '0 0 25%' : '0 0 30%',
+            borderRight: anyPanelOpen ? `1px solid ${toolbarBorder}` : 'none',
             transition: 'flex 200ms cubic-bezier(0.23, 1, 0.32, 1)',
           }}
         >
@@ -433,25 +494,26 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Right: Variable panel */}
+        {/* Right: Variable panel (mutually exclusive with pkg panel) */}
         {varPanelOpen && (
           <div
             className="flex flex-col overflow-hidden"
-            style={{ flex: '0 0 20%', minWidth: 180 }}
+            style={{ flex: '0 0 25%', minWidth: 180, maxWidth: 280 }}
           >
             <VariablePanel variables={variables} isRunning={isRunning} />
           </div>
         )}
 
-        {/* Right: Package panel */}
+        {/* Right: Package panel (mutually exclusive with var panel) */}
         {pkgPanelOpen && (
           <div
             className="flex flex-col overflow-hidden"
-            style={{ flex: '0 0 25%', minWidth: 220 }}
+            style={{ flex: '0 0 25%', minWidth: 220, maxWidth: 280 }}
           >
             <PackagePanel
-              onInsertImport={handleInsertImport}
-              onClose={() => setPkgPanelOpen(false)}
+              selectedPackages={new Set(selectedPackages.keys())}
+              onTogglePackage={handleTogglePackage}
+              onClose={() => setRightPanel(null)}
             />
           </div>
         )}
