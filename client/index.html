@@ -7,6 +7,23 @@
     name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1" />
   <title>PyCalc Live — 交互式 Python 计算器</title>
+  <!-- GitHub Pages SPA: restore path encoded by 404.html -->
+  <script>
+    (function(l) {
+      if (l.search[1] === 'p') {
+        var decoded = l.search.slice(1).split('&').map(function(s) {
+          return s.replace(/~and~/g, '&');
+        });
+        window.history.replaceState(
+          null, null,
+          l.pathname.slice(0, -1) +
+          (decoded[0] ? '/' + decoded[0].slice(2) : '') +
+          (decoded[1] ? '?' + decoded[1].slice(2) : '') +
+          l.hash
+        );
+      }
+    }(window.location));
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
