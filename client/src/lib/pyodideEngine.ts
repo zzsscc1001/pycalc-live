@@ -286,6 +286,70 @@ def _pycalc_get_vars(user_globals):
 // Persistent user namespace across runs (cleared on full reset)
 let userGlobals: any = null;
 let prevVarValues: Map<string, string> = new Map();
+// Track which packages have already been loaded to avoid re-loading
+const loadedPackages: Set<string> = new Set();
+
+// Pyodide bundled packages that require py.loadPackage() before import
+// These are NOT pure-Python and cannot be installed via micropip alone
+const PYODIDE_BUNDLED: Record<string, string[]> = {
+  numpy: ['numpy'],
+  np: ['numpy'],
+  matplotlib: ['matplotlib'],
+  plt: ['matplotlib'],
+  scipy: ['scipy'],
+  pandas: ['pandas'],
+  pd: ['pandas'],
+  pyarrow: ['pyarrow'],
+  pa: ['pyarrow'],
+  sklearn: ['scikit-learn'],
+  sympy: ['sympy'],
+  sp: ['sympy'],
+  mpmath: ['mpmath'],
+  statsmodels: ['statsmodels'],
+  sm: ['statsmodels'],
+  pillow: ['pillow'],
+  PIL: ['pillow'],
+  Image: ['pillow'],
+};
+
+/**
+ * Scan source code for import statements and pre-load any required Pyodide
+ * bundled packages via py.loadPackage() before execution.
+ */
+async function autoLoadPackages(source: string): Promise<void> {
+  const py = await loadPyodide();
+  const toLoad: Set<string> = new Set();
+
+  // Match: import X, import X as Y, from X import ..., import X.Y
+  const importRe = /^(?:import|from)\s+([\w.]+)(?:\s+as\s+(\w+))?/gm;
+  let m: RegExpExecArray | null;
+  while ((m = importRe.exec(source)) !== null) {
+    const modName = m[1].split('.')[0]; // top-level module name
+    const alias = m[2];
+    // Check by module name
+    if (PYODIDE_BUNDLED[modName]) {
+      for (const pkg of PYODIDE_BUNDLED[modName]) {
+        if (!loadedPackages.has(pkg)) toLoad.add(pkg);
+      }
+    }
+    // Check by alias
+    if (alias && PYODIDE_BUNDLED[alias]) {
+      for (const pkg of PYODIDE_BUNDLED[alias]) {
+        if (!loadedPackages.has(pkg)) toLoad.add(pkg);
+      }
+    }
+  }
+
+  if (toLoad.size > 0) {
+    const pkgList = Array.from(toLoad);
+    try {
+      await py.loadPackage(pkgList);
+      for (const pkg of pkgList) loadedPackages.add(pkg);
+    } catch (e) {
+      console.warn('[PyCalc] loadPackage failed for', pkgList, e);
+    }
+  }
+}
 
 export async function initPyodideEnv(): Promise<void> {
   const py = await loadPyodide();
@@ -305,6 +369,9 @@ export async function executeCode(source: string): Promise<ExecResult> {
   if (!userGlobals) {
     await initPyodideEnv();
   }
+
+  // Auto-load any required Pyodide bundled packages found in the source
+  await autoLoadPackages(source);
 
   const pycalcExec = py.globals.get('_pycalc_exec');
   const pycalcGetVars = py.globals.get('_pycalc_get_vars');

@@ -21,6 +21,7 @@ import VariablePanel from '@/components/VariablePanel';
 import PackagePanel from '@/components/PackagePanel';
 import { usePyodide } from '@/hooks/usePyodide';
 import { LineResult, VarInfo, PackageInfo } from '@/lib/pyodideEngine';
+import { PYODIDE_PACKAGES } from '@/lib/pyodideEngine';
 import {
   Play,
   RefreshCw,
@@ -86,7 +87,16 @@ export default function Home() {
   const [variables, setVariables] = useState<VarInfo[]>([]);
   // Right panel: 'var' | 'pkg' | null — mutually exclusive
   const [rightPanel, setRightPanel] = useState<'var' | 'pkg' | null>('var');
-  const [selectedPackages, setSelectedPackages] = useState<Map<string, PackageInfo>>(new Map());
+  // Default-select math, matplotlib, numpy to match the default example code
+  const [selectedPackages, setSelectedPackages] = useState<Map<string, PackageInfo>>(() => {
+    const defaults = ['math', 'matplotlib', 'numpy'];
+    const m = new Map<string, PackageInfo>();
+    for (const name of defaults) {
+      const pkg = PYODIDE_PACKAGES.find((p) => p.name === name);
+      if (pkg) m.set(name, pkg);
+    }
+    return m;
+  });
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [execTime, setExecTime] = useState<number | null>(null);
   const [hoveredLine, setHoveredLine] = useState<number | null>(null);
