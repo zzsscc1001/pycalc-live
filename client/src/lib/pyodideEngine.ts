@@ -198,10 +198,6 @@ def _pycalc_exec(source, user_globals):
                             line_results[stmt_line]["value"] = _pycalc_repr(val)
                         if captured:
                             line_results[stmt_line]["stdout"] = captured.rstrip('\\n')
-                        # Check if a plot was generated as side effect
-                        plot_data = _pycalc_capture_plot()
-                        if plot_data:
-                            line_results[stmt_line]["plot_svg"] = plot_data
                     except Exception as e:
                         captured = sys.stdout.getvalue()
                         sys.stdout = old_stdout

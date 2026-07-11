@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
 import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
+import { VitePWA } from "vite-plugin-pwa";
 
 // =============================================================================
 // Manus Debug Collector - Vite Plugin
@@ -205,8 +206,47 @@ function vitePluginStorageProxy(): Plugin {
 
 const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector(), vitePluginStorageProxy()];
 
+const pwPlugin = VitePWA({
+  registerType: 'autoUpdate',
+  includeAssets: ['favicon.ico', 'icons/*.png'],
+  manifest: {
+    name: 'PyCalc Live',
+    short_name: 'PyCalc',
+    description: '免安装的交互式 Python 计算器 — 逐行自动输出结果，内嵌绘图，变量实时同步',
+    theme_color: '#ffffff',
+    background_color: '#ffffff',
+    display: 'standalone',
+    orientation: 'landscape',
+    start_url: './',
+    scope: './',
+    icons: [
+      { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+    ],
+  },
+  workbox: {
+    // Cache the Pyodide WASM and wheel files from CDN
+    runtimeCaching: [
+      {
+        urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/pyodide\//,
+        handler: 'CacheFirst',
+        options: {
+          cacheName: 'pyodide-cache',
+          expiration: { maxEntries: 60, maxAgeSeconds: 30 * 24 * 60 * 60 },
+          cacheableResponse: { statuses: [0, 200] },
+        },
+      },
+      {
+        urlPattern: /^https:\/\/fonts\.googleapis\.com\//,
+        handler: 'StaleWhileRevalidate',
+        options: { cacheName: 'google-fonts-cache' },
+      },
+    ],
+  },
+});
+
 export default defineConfig(({ command }) => ({
-  plugins,
+  plugins: [...plugins, pwPlugin],
   base: command === 'build' ? '/pycalc-live/' : '/',
   resolve: {
     alias: {
