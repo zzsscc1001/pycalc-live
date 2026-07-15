@@ -83,6 +83,8 @@ export default function Home() {
 
   const [scrollTop, setScrollTop] = useState(0);
   const [lineCount, setLineCount] = useState(() => loadSavedCode().split('\n').length);
+  // Fix: load initial code once and freeze it — never re-read from localStorage during renders
+  const [initialCode] = useState(() => loadSavedCode());
   const [lineResults, setLineResults] = useState<LineResult[]>([]);
   const [variables, setVariables] = useState<VarInfo[]>([]);
   // Right panel: 'var' | 'pkg' | null — mutually exclusive
@@ -462,7 +464,7 @@ export default function Home() {
           <div className="flex-1 overflow-hidden">
             <CodeEditor
               ref={editorRef}
-              initialValue={loadSavedCode()}
+              initialValue={initialCode}
               onChange={handleCodeChange}
               onScrollChange={handleScrollChange}
               onRun={handleRun}

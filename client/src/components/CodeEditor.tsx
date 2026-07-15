@@ -105,6 +105,8 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
     const onChangeRef = useRef(onChange);
     const onScrollRef = useRef(onScrollChange);
     const onHoverLineRef = useRef(onHoverLine);
+    // Store initialValue in a ref so changes to the prop never trigger editor rebuild
+    const initialValueRef = useRef(initialValue);
 
     useEffect(() => { onRunRef.current = onRun; }, [onRun]);
     useEffect(() => { onRunFreshRef.current = onRunFresh; }, [onRunFresh]);
@@ -203,7 +205,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
       });
 
       const state = EditorState.create({
-        doc: initialValue,
+        doc: initialValueRef.current,
         extensions: [
           history(),
           lineNumbers(),
@@ -255,7 +257,7 @@ const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(
 
       const view = new EditorView({ state, parent: containerRef.current });
       viewRef.current = view;
-    }, [initialValue, readOnly]);
+    }, [readOnly]);
 
     useEffect(() => {
       initEditor();
